@@ -1,4 +1,4 @@
-# recommendMovies
+# RecommendMovies
 Learning Scala, Spark and SBT
 
 
