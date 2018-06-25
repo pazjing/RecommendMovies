@@ -2,7 +2,7 @@ name := "RecommendMovies"
 
 version := "1.0"
 
-organization := "co.nz.jing"
+organization := "nz.co.jing"
 
 scalaVersion := "2.11.8"
 

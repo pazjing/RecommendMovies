@@ -1,17 +1,18 @@
-package co.nz.jing
+package nz.co.jing
 
 import java.nio.charset.CodingErrorAction
-
 import org.apache.log4j.Logger
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.SparkContext._
+import org.apache.spark.HashPartitioner
 
 import scala.io.{Codec, Source}
 import scala.math.sqrt
 
 object RecommendMovies {
 
-  type MovieRating = (Int, Double)
-  /** Load movies name as Map :  MovieId -> MovieName **/  //MovieID::Title::Genres =>  //MovieId -> MovieName
+
+  /** Load movies name as Map :  MovieId -> MovieName **/
   def loadMovieNames(movieInfoFile: String): Map[Int, String] ={
 
     implicit val codec = Codec("UTF-8")
@@ -24,7 +25,7 @@ object RecommendMovies {
     for(line <- lines) {
       val fields = line.split("::")
       if(fields.length > 1) {
-        movieNames += fields(0).toInt -> fields(1)
+        movieNames += (fields(0).toInt -> fields(1))
       }
     }
 
@@ -32,6 +33,7 @@ object RecommendMovies {
 
   }
 
+  type MovieRating = (Int, Double)
   /** Parse the Movie Rating line **/  //UserID::MovieID::Rating::Timestamp =>  (userId, (MovieId, Rating))
   def parseRatingLine(line: String) :(Int, MovieRating) = {
     var userId: Int = 0
@@ -100,7 +102,6 @@ object RecommendMovies {
 
   }
 
-
   /** Our main function **/
   def main(args: Array[String]): Unit = {
 
@@ -121,8 +122,13 @@ object RecommendMovies {
       movieInfoFile = args(2)
     }
 
+    println("Input args are : " +  movieId + " " + ratingFile + " " + movieInfoFile )
 
-    val sc = new SparkContext("local", "SimilarMovies")
+    val conf = new SparkConf()
+    conf.setAppName("RecommendMovies")
+    val sc = new SparkContext(conf)
+    //val sc = new SparkContext("local", "SimilarMovies") // for local run
+
     sc.setLogLevel("ERROR")
 
     log.info("Load movies name.")
@@ -137,7 +143,7 @@ object RecommendMovies {
 
     val uniqueJoinUserRating = joinedUserRating.filter(filterDuplicate)
 
-    val moviePairRating = uniqueJoinUserRating.map(convertToMoviePair)   // ((MovieId, MovieId), (Rating, Rating))
+    val moviePairRating = uniqueJoinUserRating.map(convertToMoviePair).partitionBy(new HashPartitioner(100))   // ((MovieId, MovieId), (Rating, Rating))
 
     val moviePairRatingGroup = moviePairRating.groupByKey() // ((MovieId, MovieId), (Rating, Rating), (Rating, Rating)...)
 
@@ -148,7 +154,7 @@ object RecommendMovies {
 
     // Now, find the similarities of the movie we are interested in
     val scoreThreshold = 0.97
-    val cooccurenceThreshold = 50
+    val cooccurenceThreshold = 1000
 
     val results = moviePairSimilarity.filter(x => {
       val moviePair = x._1
